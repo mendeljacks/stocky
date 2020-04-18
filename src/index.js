@@ -1,14 +1,4 @@
-import doGet from './server/webapp';
-import './es6';
+import { uniq } from 'ramda';
 
-global.doGet = doGet;
-
-global.sendmail = (email = Session.getActiveUser().getEmail()) => {
-  const htmlBody = `
-    <p>This email was sent using the <a href="https://www.labnol.org/internet/google-apps-script-developers/32305/">Apps Script Starter</a></p>
-    <p>For assistance, please tweet <a href="https://twitter.com/labnol">@labnol</a></p>
-  `;
-
-  const textBody = htmlBody.replace(/<[^>]+>/g, ' ');
-  GmailApp.sendEmail(email, 'Hello from Google Apps Script', textBody, { htmlBody });
-};
+const ppp = (s) => uniq(s).join('');
+global.ppp = ppp;
