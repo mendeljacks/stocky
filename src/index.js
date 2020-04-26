@@ -1,35 +1,48 @@
 import { values } from 'ramda';
 import { get, post } from './request';
-const base_url = `https://api-dev.no3rd.ca`
-global.login = async (email, password) => {
+global.login = async (email, password, base_url) => {
   const result = await get(`${base_url}/login?email=${email}&password=${password}`)
   return result.token
 };
 
-global.get_inventory_adjustments = async (warehouse_id, store_id, offset, limit, token) => {
+global.get_variants = async (store_id, base_url, token) => {
+  const limit = 1000
   const body = {
-    // include_vendors: [vendors],
-    inventory_adjustments: {
-      limit: limit,
-      offset: offset,
-      searches: [
+    "variants": {
+      "include": ["id", "barcode", "sku", "asin"],
+      "offset": 0,
+      "limit": limit
+    },
+    "variant_in_stores": {
+      "include": ["id","variant_id","store_id","price","wam","no3rd_quantity","vendor_quantity"],
+      "searches": [
         {
-          table: "shelves",
-          column: "Warehouses_id",
-          equals: warehouse_id,
-          mode: "and"
-        },
-        {
-          table: "inventory_adjustments",
-          column: "store_id",
-          equals: store_id,
-          mode: "and"
-        }
-      ],
-      // group_by: ["variant_id", "shelf_id"],
-      include: ['id', 'variant_id', 'quantity', 'shelf_id']
+          "column": "store_id",
+          "equals": store_id,
+          "mode": "and"
+        }]
     }
   }
-  const result = await post(`${base_url}/inventory_adjustments/search`, body, token)
-  return result.inventory_adjustments.map(el => values(el))
+  let {row_count, variants} = await post(`${base_url}/variants/search`, body, token)
+
+
+  const total_pages = Math.ceil(row_count / limit)
+
+  for (let page = 1; page < total_pages; page++) {
+      const new_offset = page * limit
+      body.variants.offset = new_offset
+      const { variants: new_variants } =  await post(`${base_url}/variants/search`, body, token)
+
+      variants = [...variants, ...new_variants]
+  }
+
+  return variants.reduce((acc,val)=>{
+    const {id, barcode, sku, asin, variant_in_stores=[]} = val
+    const {price, wam, no3rd_quantity, vendor_quantity} = variant_in_stores[0] || {}
+    acc.push([id, barcode, sku, asin, price, wam, no3rd_quantity, vendor_quantity])
+    return acc
+  },[])
+
+
+
 }
