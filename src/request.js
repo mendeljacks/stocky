@@ -9,7 +9,7 @@ export const post = async (url, body, token) => {
     const response = await UrlFetchApp.fetch(url, options).getContentText()
     return JSON.parse(response)
 }
-export const get = async (url) => {
-    const response = await UrlFetchApp.fetch(url).getContentText()
+export const get = async (url, headers) => {
+    const response = await UrlFetchApp.fetch(url, {headers}).getContentText()
     return JSON.parse(response)
 }

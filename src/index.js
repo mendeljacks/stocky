@@ -1,48 +1,43 @@
-import { values } from 'ramda';
-import { get, post } from './request';
-global.login = async (email, password, base_url) => {
-  const result = await get(`${base_url}/login?email=${email}&password=${password}`)
-  return result.token
-};
+import {compose, flatten, keys, map, pickAll, values, uniq} from 'ramda'
+import {camel} from './helpers'
+import {get} from './request'
 
-global.get_variants = async (store_id, base_url, token) => {
-  const limit = 1000
-  const body = {
-    "variants": {
-      "include": ["id", "barcode", "sku", "asin"],
-      "offset": 0,
-      "limit": limit
-    },
-    "variant_in_stores": {
-      "include": ["id","variant_id","store_id","price","wam","no3rd_quantity","vendor_quantity"],
-      "searches": [
-        {
-          "column": "store_id",
-          "equals": store_id,
-          "mode": "and"
-        }]
+global.get_items = async (route, go_flow_store, cookie) => {
+  const offset = 0
+  const limit = 250
+  const url = `https://${go_flow_store}.goflowapp.com/api/${route}?$top=${limit}&$skip=${offset}`
+  const go_flow_response = await get(url, {cookie})
+  var {count, results} = go_flow_response
+  var rows = results
+  if (count > limit) {
+    const request_count = Math.ceil(count / limit)
+    for (let i = 1; i < request_count; i++) {
+      const offset = i * limit
+      const url = `https://${go_flow_store}.goflowapp.com/api/${route}?$top=${limit}&$skip=${offset}`
+      var {count, results: new_results} = await get(url, {cookie})
+      rows = [...rows, ...new_results]
     }
   }
-  let {row_count, variants} = await post(`${base_url}/variants/search`, body, token)
+
+  const column_names = compose(uniq, flatten, map(keys))(rows)
+  const human_column_names = map(camel)(column_names)
 
 
-  const total_pages = Math.ceil(row_count / limit)
+  const google_sheet_rows = compose(map(values), map(pickAll(column_names)))(rows)
 
-  for (let page = 1; page < total_pages; page++) {
-      const new_offset = page * limit
-      body.variants.offset = new_offset
-      const { variants: new_variants } =  await post(`${base_url}/variants/search`, body, token)
+  return [human_column_names, ...google_sheet_rows]
+}
 
-      variants = [...variants, ...new_variants]
-  }
+global.post = () => {
+  var sheet = SpreadsheetApp.getActiveSheet()
+  const test = sheet.getRange("A1:D4")
+  var htmlApp = HtmlService
+    .createHtmlOutput('<p>A change of speed, a change of style...</p>')
+    .setTitle('My HtmlService Application')
+    .setWidth(250)
+    .setHeight(300);
 
-  return variants.reduce((acc,val)=>{
-    const {id, barcode, sku, asin, variant_in_stores=[]} = val
-    const {price, wam, no3rd_quantity, vendor_quantity} = variant_in_stores[0] || {}
-    acc.push([id, barcode, sku, asin, price, wam, no3rd_quantity, vendor_quantity])
-    return acc
-  },[])
-
-
-
+SpreadsheetApp.getActiveSpreadsheet().show(htmlApp);
+  // var rangeList = sheet.getRangeList(['A4', 'B5'])
+  // rangeList.clear({contentsOnly: true})
 }
